@@ -1,7 +1,9 @@
-target/
+@'
 .idea/
-*.iml
+**/node_modules/
+**/dist/
+**/target/
 .env
 .env.*
 !.env.example
-*.log
+'@ | Set-Content -Encoding utf8 .gitignore
