@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: spotify-postgres
+    environment:
+      POSTGRES_DB: spotify
+      POSTGRES_USER: spotify_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_local}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spotify_user -d spotify"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  backend:
+    build: .
+    container_name: spotify-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/spotify
+      SPRING_DATASOURCE_USERNAME: spotify_user
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-change_me_local}
+      JWT_SECRET: ${JWT_SECRET:-local-development-secret-key-change-this-32-bytes-minimum}
+    ports:
+      - "8080:8081"
+volumes:
+  postgres_data:

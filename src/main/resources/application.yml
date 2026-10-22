@@ -1,0 +1,27 @@
+server:
+  port: 8081
+spring:
+  application:
+    name: spotify-backend
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/spotify}
+    username: ${SPRING_DATASOURCE_USERNAME:spotify_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:change_me_local}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  jackson:
+    default-property-inclusion: non_null
+app:
+  jwt:
+    secret: ${JWT_SECRET:-"eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzcG90aWZ5LWJhY2tlbmQiLCJzdWIiOiIxIiwiZXhwIjoxNzkyMDczNDM0LCJpYXQiOjE3OTIwNjk4MzQsImVtYWlsIjoiemV5bmVwQGV4YW1wbGUuY29tIn0.VrCk8B0OvcSB8x-EjOWlKctz7sfaGeB2oRQIr6_EYOk"}
+    expiration-minutes: 60
+  admin:
+    email: ${ADMIN_EMAIL:zeynep@example.com}
+    password: ${ADMIN_PASSWORD:Test12345!}
+    display-name: System Admin
