@@ -60,7 +60,6 @@ abstract class IntegrationTestSupport {
 
         return users.saveAndFlush(user);
     }
-
     protected Album createAlbum() {
         return albums.saveAndFlush(
                 new Album(
@@ -69,6 +68,18 @@ abstract class IntegrationTestSupport {
                         "Test Artist"
                 )
         );
+    }
+
+    protected Album createAlbum(AppUser owner) {
+        Album album = new Album(
+                "Test Album",
+                "Album description",
+                "Test Artist"
+        );
+
+        album.setOwner(owner);
+
+        return albums.saveAndFlush(album);
     }
 
     protected Song createSong(AppUser owner, Album album, String title) {

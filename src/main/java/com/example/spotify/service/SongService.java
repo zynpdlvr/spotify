@@ -19,7 +19,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-
+import org.springframework.security.access.AccessDeniedException;
 import java.util.UUID;
 
 @Service
@@ -85,7 +85,17 @@ public class SongService {
             JwtAuthenticationToken authentication
     ) {
         AppUser currentUser = getCurrentUser(authentication);
-        Album album = findAlbum(req.albumPublicId());
+        UUID userPublicId = currentUser.getPublicId();
+
+        boolean isAdmin = authentication.getAuthorities()
+                .stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
+        Album album = findAlbumForSong(
+                req.albumPublicId(),
+                currentUser.getPublicId(),
+                isAdmin(authentication)
+        );
 
         Song song = songMapper.toEntity(req);
 
@@ -106,10 +116,14 @@ public class SongService {
     ) {
         Song song = find(publicId);
         AppUser currentUser = getCurrentUser(authentication);
-
         checkUpdatePermission(song, currentUser, authentication);
 
-        Album album = findAlbum(req.albumPublicId());
+
+        Album album = findAlbumForSong(
+                req.albumPublicId(),
+                currentUser.getPublicId(),
+                isAdmin(authentication)
+        );
 
         // DTO -> mevcut Entity alanlarının eşlenmesi
         songMapper.updateEntity(req, song);
@@ -137,7 +151,15 @@ public class SongService {
 
         // Albüm yalnızca istekte verilmişse değiştirilir
         if (request.albumPublicId() != null) {
-            song.setAlbum(findAlbum(request.albumPublicId()));
+            boolean isAdmin = authentication.getAuthorities()
+                    .stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
+            song.setAlbum(findAlbumForSong(
+                    request.albumPublicId(),
+                    currentUser.getPublicId(),
+                    isAdmin
+            ));
         }
 
         return songMapper.toResponse(song);
@@ -194,6 +216,55 @@ public class SongService {
                         )
                 );
     }
+
+
+
+    private boolean isAdmin(JwtAuthenticationToken authentication) {
+        return authentication.getAuthorities()
+                .stream()
+                .anyMatch(a ->
+                        a.getAuthority().equals("ROLE_ADMIN")
+                                || a.getAuthority().equals("ADMIN")
+                );
+    }
+
+
+    private Album findAlbumForSong(
+            UUID albumPublicId,
+            UUID userPublicId,
+            boolean isAdmin
+    ) {
+        // Albümsüz şarkı oluşturulmasına izin ver.
+        if (albumPublicId == null) {
+            return null;
+        }
+
+        // Önce albümün gerçekten var olduğunu doğrula.
+        Album album = albumRepository.findByPublicId(albumPublicId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Albüm bulunamadı."
+                        )
+                );
+
+        // Admin albüm sahipliğinden bağımsız işlem yapabilir.
+        if (isAdmin) {
+            return album;
+        }
+
+        // Albümün sahibi yoksa normal sanatçı kullanamaz.
+        if (album.getOwner() == null
+                || album.getOwner().getPublicId() == null
+                || !album.getOwner().getPublicId().equals(userPublicId)) {
+            throw new AccessDeniedException(
+                    "Bu albüme şarkı ekleme yetkiniz yok."
+            );
+        }
+
+        return album;
+    }
+
 
     // JWT subject üzerinden mevcut kullanıcıyı bulur.
     private AppUser getCurrentUser(JwtAuthenticationToken auth) {
