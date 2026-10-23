@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { getSongs } from "../api/songApi";
 import { COVER_COLORS } from "../utils/constants";
 
-export function useSongs(query) {
+export function useSongs(query, refreshKey = 0) {
     const [songs, setSongs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -44,7 +44,7 @@ export function useSongs(query) {
         fetchSongs();
 
         return () => controller.abort();
-    }, [query]);
+    }, [query, refreshKey]);
 
     return {
         songs,

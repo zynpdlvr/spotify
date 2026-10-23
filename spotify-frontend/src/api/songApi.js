@@ -10,3 +10,12 @@ export async function getSongs({ query, signal } = {}) {
     const data = await apiRequest(path, { signal });
     return getEmbeddedList(data);
 }
+
+
+export function createSong(payload) {
+    return apiRequest("/songs", {
+        method: "POST",
+        body: JSON.stringify(payload),
+    });
+}
+

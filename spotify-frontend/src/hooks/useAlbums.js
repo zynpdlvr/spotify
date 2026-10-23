@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from "react";
-import { getAlbumsList } from "../api/AlbumApi";
+import { getAlbumsList } from "../api/albumApi.js";
 import { COVER_COLORS } from "../utils/constants";
 
 export function useAlbums(authVersion) {

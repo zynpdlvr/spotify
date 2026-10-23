@@ -12,3 +12,12 @@ export async function getAlbumsList() {
     const data = await apiRequest("/albums");
     return getEmbeddedList(data);
 }
+
+
+export function createAlbum(payload) {
+    return apiRequest("/albums", {
+        method: "POST",
+        body: JSON.stringify(payload),
+    });
+}
+

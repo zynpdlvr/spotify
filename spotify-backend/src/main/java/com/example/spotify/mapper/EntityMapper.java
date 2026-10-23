@@ -20,7 +20,8 @@ public final class EntityMapper {
         return new AuthDTO.UserResponse(
                 user.getPublicId(),
                 user.getDisplayName(),
-                user.getEmail()
+                user.getEmail(),
+                user.getRole()
         );
     }
 

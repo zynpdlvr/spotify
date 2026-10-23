@@ -2,11 +2,11 @@ import { useMemo, useState } from "react";
 import "./App.css";
 
 // API
-import { getAlbumById } from "./api/AlbumApi";
+import { getAlbumById } from "./api/AlbumApi.js";
 import { loginRequest, registerRequest } from "./api/authApi";
 import { apiRequest } from "./api/client";
 import { addSongToPlaylist as addSongToPlaylistApi } from "./api/playlistApi";
-import { COVER_COLORS } from "./utils/constants";
+import { COVER_COLORS, isArtist } from "./utils/constants";
 
 // HOOKS
 import { useSongs } from "./hooks/useSongs";
@@ -25,10 +25,13 @@ import Topbar from "./components/Topbar";
 import LoginModal from "./components/LoginModal";
 import SongTable from "./components/SongTable";
 import ProfileModal from "./components/ProfileModal";
+import AlbumCreatePage from "./pages/AlbumCreatePage";
+import SongCreatePage from "./pages/SongCreatePage";
 
 export default function App() {
   const [activeMenu, setActiveMenu] = useState("Ana Sayfa");
   const [search, setSearch] = useState("");
+  const [catalogVersion, setCatalogVersion] = useState(0);
   const [activePlaylist, setActivePlaylist] = useState(null);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [selectedAlbumSongIds, setSelectedAlbumSongIds] = useState([]);
@@ -78,10 +81,10 @@ export default function App() {
     albums,
     albumsLoading,
     albumsError,
-  } = useAlbums(authVersion);
+  } = useAlbums(authVersion + catalogVersion);
 
   // Songs — server-side search
-  const { songs, loading, error } = useSongs(search || undefined);
+  const { songs, loading, error } = useSongs(search || undefined, catalogVersion);
 
   // Playlists
   const {
@@ -417,6 +420,7 @@ export default function App() {
   return (
       <div className="app-shell">
         {/* SOL MENÜ */}
+
         <Sidebar
             activeMenu={activeMenu}
             playlists={playlists}
@@ -433,9 +437,36 @@ export default function App() {
                 setLoginOpen(true);
                 return;
               }
+
               handleNavigate("Beğenilen Şarkılar");
             }}
+            canCreateCatalog={loggedIn && isArtist(role)}
+            onCreateAlbum={() => {
+              if (!loggedIn) {
+                setLoginOpen(true);
+                return;
+              }
+
+              if (!isArtist(role)) {
+                return;
+              }
+
+              handleNavigate("Albüm Oluştur");
+            }}
+            onCreateSong={() => {
+              if (!loggedIn) {
+                setLoginOpen(true);
+                return;
+              }
+
+              if (!isArtist(role)) {
+                return;
+              }
+
+              handleNavigate("Şarkı Oluştur");
+            }}
         />
+
 
         {/* ANA İÇERİK */}
         <main className="main-content">
@@ -449,151 +480,166 @@ export default function App() {
               onProfileClick={handleProfileClick}
           />
 
-          <section className="content-section">
-            <div className="greeting">
-              <p className="eyebrow">MÜZİK SENİNLE</p>
-              <h1>
-                {search
-                    ? "Arama sonuçları"
-                    : activeMenu === "Beğenilen Şarkılar"
-                        ? "Beğenilen Şarkılar"
-                        : selectedAlbum
-                            ? selectedAlbum.name
-                            : selectedPlaylistData
-                                ? selectedPlaylistData.name
-                                : "Tekrar hoş geldin"}
-              </h1>
-              <p>Bugünün müziğini keşfet.</p>
-            </div>
+          {activeMenu === "Albüm Oluştur" ? (
+              <AlbumCreatePage
+                  onCancel={() => handleNavigate("Ana Sayfa")}
+                  onCreated={() => setCatalogVersion((version) => version + 1)}
+              />
+          ) : activeMenu === "Şarkı Oluştur" ? (
+              <SongCreatePage
+                  albums={albums}
+                  onCancel={() => handleNavigate("Ana Sayfa")}
+                  onCreated={() => setCatalogVersion((version) => version + 1)}
+              />
+          ) : (
+              <section className="content-section">
+                <div className="greeting">
+                  <p className="eyebrow">MÜZİK SENİNLE</p>
+                  <h1>
+                    {search
+                        ? "Arama sonuçları"
+                        : activeMenu === "Beğenilen Şarkılar"
+                            ? "Beğenilen Şarkılar"
+                            : selectedAlbum
+                                ? selectedAlbum.name
+                                : selectedPlaylistData
+                                    ? selectedPlaylistData.name
+                                    : "Tekrar hoş geldin"}
+                  </h1>
+                  <p>Bugünün müziğini keşfet.</p>
+                </div>
 
-            {/* ANA SAYFA */}
-            {!search &&
-                activeMenu === "Ana Sayfa" &&
-                !selectedAlbum &&
-                !selectedPlaylistData && (
-                    <>
-                      <h2>Senin için</h2>
+                <>
+                  {/* ANA SAYFA */}
+                  {!search &&
+                      activeMenu === "Ana Sayfa" &&
+                      !selectedAlbum &&
+                      !selectedPlaylistData && (
+                          <>
+                            <h2>Senin için</h2>
 
-                      {playlistsLoading && (
-                          <p className="empty-state">Playlist'ler yükleniyor...</p>
-                      )}
+                            {playlistsLoading && (
+                                <p className="empty-state">Playlist'ler yükleniyor...</p>
+                            )}
 
-                      <div className="playlist-grid">
-                        {!playlistsLoading &&
-                            playlists.map((playlist) => (
-                                <button
-                                    className="playlist-card"
-                                    key={playlist.publicId ?? playlist.id}
-                                    onClick={() => selectPlaylist(playlist)}
-                                >
-                                  <Cover
-                                      color={playlist.color}
-                                      icon={playlist.icon}
-                                  />
-                                  <span className="card-title">
+                            <div className="playlist-grid">
+                              {!playlistsLoading &&
+                                  playlists.map((playlist) => (
+                                      <button
+                                          className="playlist-card"
+                                          key={playlist.publicId ?? playlist.id}
+                                          onClick={() => selectPlaylist(playlist)}
+                                      >
+                                        <Cover
+                                            color={playlist.color}
+                                            icon={playlist.icon}
+                                        />
+                                        <span className="card-title">
                         {playlist.title ?? playlist.name}
                       </span>
-                                  <span className="card-description">
+                                        <span className="card-description">
                         {playlist.description ?? "Çalma listesi"}
                       </span>
-                                  <span className="play-float">▶</span>
-                                </button>
-                            ))}
-                      </div>
-                      {/* ALBÜMLER */}
-                      <AlbumGrid
-                          albums={albums}
-                          albumsLoading={albumsLoading}
-                          albumsError={albumsError}
-                          onSelectAlbum={selectAlbum}
-                      />
+                                        <span className="play-float">▶</span>
+                                      </button>
+                                  ))}
+                            </div>
+                            {/* ALBÜMLER */}
+                            <AlbumGrid
+                                albums={albums}
+                                albumsLoading={albumsLoading}
+                                albumsError={albumsError}
+                                onSelectAlbum={selectAlbum}
+                            />
 
-                      {/* SON EKLENEN ŞARKILAR */}
+                            {/* SON EKLENEN ŞARKILAR */}
+                            <div className="section-heading">
+                              <h2>Şarkılar</h2>
+                              <span className="muted">{songs.length} şarkı</span>
+                            </div>
+
+                            <div className="recent-grid">
+                              {songs.slice(0, 4).map((song) => (
+                                  <button
+                                      className="recent-card"
+                                      key={song.id}
+                                  >
+                                    <Cover color={song.color} icon={song.icon} />
+                                    <strong>{song.title}</strong>
+                                    <span>{song.artist}</span>
+                                  </button>
+                              ))}
+                            </div>
+                          </>
+                      )}
+
+                  {/* SEÇİLİ PLAYLIST İŞLEMLERİ */}
+                  {selectedPlaylistData && (
                       <div className="section-heading">
-                        <h2>Şarkılar</h2>
-                        <span className="muted">{songs.length} şarkı</span>
-                      </div>
+                        <div>
+                          <h2>{selectedPlaylistData.name}</h2>
+                          <p>
+                            {selectedPlaylistData.description ??
+                                "Playlist açıklaması yok."}
+                          </p>
+                        </div>
 
-                      <div className="recent-grid">
-                        {songs.slice(0, 4).map((song) => (
-                            <button
-                                className="recent-card"
-                                key={song.id}
-                            >
-                              <Cover color={song.color} icon={song.icon} />
-                              <strong>{song.title}</strong>
-                              <span>{song.artist}</span>
-                            </button>
-                        ))}
+                        <div className="playlist-actions">
+                          <button onClick={updatePlaylist}>Düzenle</button>
+                          <button onClick={deletePlaylist}>Playlist'i sil</button>
+                        </div>
                       </div>
-                    </>
-                )}
+                  )}
 
-            {/* SEÇİLİ PLAYLIST İŞLEMLERİ */}
-            {selectedPlaylistData && (
-                <div className="section-heading">
-                  <div>
-                    <h2>{selectedPlaylistData.name}</h2>
-                    <p>
-                      {selectedPlaylistData.description ??
-                          "Playlist açıklaması yok."}
-                    </p>
+                  {/* HATA MESAJLARI */}
+                  {favoritesError && (
+                      <p className="empty-state" role="alert">{favoritesError}</p>
+                  )}
+
+                  {playlistsError && (
+                      <p className="empty-state" role="alert">{playlistsError}</p>
+                  )}
+
+                  {/* ŞARKI LİSTESİ */}
+                  <div className="section-heading songs-heading">
+                    <h2>
+                      {search
+                          ? "Bulunan şarkılar"
+                          : activeMenu === "Beğenilen Şarkılar"
+                              ? "Beğenilen Şarkılar"
+                              : selectedAlbum
+                                  ? selectedAlbum.name
+                                  : selectedPlaylistData
+                                      ? "Playlist şarkıları"
+                                      : activeMenu === "Kitaplığın"
+                                          ? "Şarkı kitaplığı"
+                                          : "Popüler şarkılar"}
+                    </h2>
+
+                    <span className="muted">{visibleSongs.length} şarkı</span>
                   </div>
 
-                  <div className="playlist-actions">
-                    <button onClick={updatePlaylist}>Düzenle</button>
-                    <button onClick={deletePlaylist}>Playlist'i sil</button>
-                  </div>
-                </div>
-            )}
-
-            {/* HATA MESAJLARI */}
-            {favoritesError && (
-                <p className="empty-state" role="alert">{favoritesError}</p>
-            )}
-
-            {playlistsError && (
-                <p className="empty-state" role="alert">{playlistsError}</p>
-            )}
-
-            {/* ŞARKI LİSTESİ */}
-            <div className="section-heading songs-heading">
-              <h2>
-                {search
-                    ? "Bulunan şarkılar"
-                    : activeMenu === "Beğenilen Şarkılar"
-                        ? "Beğenilen Şarkılar"
-                        : selectedAlbum
-                            ? selectedAlbum.name
-                            : selectedPlaylistData
-                                ? "Playlist şarkıları"
-                                : activeMenu === "Kitaplığın"
-                                    ? "Şarkı kitaplığı"
-                                    : "Popüler şarkılar"}
-              </h2>
-
-              <span className="muted">{visibleSongs.length} şarkı</span>
-            </div>
-
-            <SongTable
-                visibleSongs={visibleSongs}
-                loading={loading}
-                error={error}
-                favoritesLoading={favoritesLoading}
-                favorites={favorites}
-                favoriteActionLoading={favoriteActionLoading}
-                activeMenu={activeMenu}
-                selectedPlaylistData={selectedPlaylistData}
-                selectedPlaylistSongIds={selectedPlaylistSongIds}
-                search={search}
-                toggleFavorite={guardedToggleFavorite}
-                addSongToPlaylist={addSongToPlaylist}
-                removeSongFromPlaylist={removeSongFromPlaylist}
-                playlists={playlists}
-                playlistsLoading={playlistsLoading}
-                onPromptLogin={() => setLoginOpen(true)}
-            />
-          </section>
+                  <SongTable
+                      visibleSongs={visibleSongs}
+                      loading={loading}
+                      error={error}
+                      favoritesLoading={favoritesLoading}
+                      favorites={favorites}
+                      favoriteActionLoading={favoriteActionLoading}
+                      activeMenu={activeMenu}
+                      selectedPlaylistData={selectedPlaylistData}
+                      selectedPlaylistSongIds={selectedPlaylistSongIds}
+                      search={search}
+                      toggleFavorite={guardedToggleFavorite}
+                      addSongToPlaylist={addSongToPlaylist}
+                      removeSongFromPlaylist={removeSongFromPlaylist}
+                      playlists={playlists}
+                      playlistsLoading={playlistsLoading}
+                      onPromptLogin={() => setLoginOpen(true)}
+                  />
+                </>
+              </section>
+          )}
         </main>
 
         {/* GİRİŞ / KAYIT MODALI */}

@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.util.UUID;
+import com.example.spotify.entity.Role;
 
 public final class AuthDTO {
     private AuthDTO() {}
@@ -13,5 +14,10 @@ public final class AuthDTO {
                                   @NotBlank @Size(min=8, max=72) String password) {}
     public record LoginRequest(@NotBlank @Email String email, @NotBlank String password) {}
     public record AuthResponse(String accessToken, String tokenType, long expiresInSeconds, UserResponse user) {}
-    public record UserResponse(UUID publicId, String displayName, String email) {}
+    public record UserResponse(
+            UUID publicId,
+            String displayName,
+            String email,
+            com.example.spotify.entity.Role role
+    ) {}
 }
