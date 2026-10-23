@@ -1,5 +1,4 @@
-
-const API_BASE = "http://localhost:8081/api/v1";
+import { API_BASE } from "../utils/constants";
 
 export async function apiRequest(path, options = {}) {
     const token = localStorage.getItem("accessToken");
@@ -28,5 +27,4 @@ export async function apiRequest(path, options = {}) {
 
     return response.json();
 }
-
 export { API_BASE };

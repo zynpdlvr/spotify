@@ -1,408 +1,122 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import "./App.css";
 
-const API_BASE = "http://localhost:8081/api/v1";
+// API
+import { getAlbumById } from "./api/AlbumApi";
+import { loginRequest, registerRequest } from "./api/authApi";
+import { apiRequest } from "./api/client";
+import { addSongToPlaylist as addSongToPlaylistApi } from "./api/playlistApi";
+import { COVER_COLORS } from "./utils/constants";
 
-const COVER_COLORS = ["purple", "pink", "blue", "orange", "red"];
+// HOOKS
+import { useSongs } from "./hooks/useSongs";
+import { useAlbums } from "./hooks/useAlbums";
+import { usePlaylists } from "./hooks/usePlaylists";
+import { useFavorites } from "./hooks/useFavorites";
+import { useVisibleSongs } from "./hooks/useVisibleSongs";
+import { useAuth } from "./hooks/useAuth";
+import { useUser } from "./hooks/useUser";
 
-function Cover({ color = "purple", icon = "♫", small = false }) {
-  return (
-      <div className={`cover ${color} ${small ? "cover-small" : ""}`}>
-        <span>{icon}</span>
-      </div>
-  );
-}
-
-// HATEOAS yanıtındaki gömülü listeyi bulur.
-function getEmbeddedList(data) {
-  const embedded = data?._embedded ?? {};
-  return Object.values(embedded).find(Array.isArray) ?? [];
-}
+// COMPONENTS
+import Cover from "./components/Cover";
+import AlbumGrid from "./components/AlbumGrid";
+import Sidebar from "./components/Sidebar";
+import Topbar from "./components/Topbar";
+import LoginModal from "./components/LoginModal";
+import SongTable from "./components/SongTable";
+import ProfileModal from "./components/ProfileModal";
 
 export default function App() {
   const [activeMenu, setActiveMenu] = useState("Ana Sayfa");
   const [search, setSearch] = useState("");
-  const [currentSong, setCurrentSong] = useState(null);
-  const [playing, setPlaying] = useState(false);
-  const [favorites, setFavorites] = useState([]);
   const [activePlaylist, setActivePlaylist] = useState(null);
-
-  // API verileri
-  const [songs, setSongs] = useState([]);
-  const [albums, setAlbums] = useState([]);
-  const [playlists, setPlaylists] = useState([]);
-
-  // Şarkıların yüklenme ve hata durumları
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  // Albüm yüklenme ve hata durumları
-  const [albumsLoading, setAlbumsLoading] = useState(true);
-  const [albumsError, setAlbumsError] = useState("");
-
-  // Playlist yüklenme ve hata durumları
-  const [playlistsLoading, setPlaylistsLoading] = useState(true);
-  const [playlistsError, setPlaylistsError] = useState("");
-
-  const [favoritesLoading, setFavoritesLoading] = useState(false);
-  const [favoritesError, setFavoritesError] = useState("");
-  const [favoriteActionLoading, setFavoriteActionLoading] = useState(false);
-
-
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [selectedAlbumSongIds, setSelectedAlbumSongIds] = useState([]);
   const [selectedPlaylistData, setSelectedPlaylistData] = useState(null);
   const [selectedPlaylistSongIds, setSelectedPlaylistSongIds] = useState([]);
 
-
-  //login
-  const [loginOpen, setLoginOpen] = useState(false);
+  // Login/Register state
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
-  const [authVersion, setAuthVersion] = useState(0);
-  const [loggedIn, setLoggedIn] = useState(
-      Boolean(localStorage.getItem("accessToken"))
-  );
-  // ŞARKILARI API'DEN GETİR
-  useEffect(() => {
-    const controller = new AbortController();
 
+  // Profile modal state
+  const [profileOpen, setProfileOpen] = useState(false);
 
+  // Auth
+  const {
+    loggedIn,
+    user,
+    setUser,
+    role,
+    authVersion,
+    loginOpen,
+    setLoginOpen,
+    handleLoginSuccess,
+    handleLogout,
+  } = useAuth();
 
-
-    function handleLogout() {
-      localStorage.removeItem("accessToken");
-
-      setLoggedIn(false);
-      setFavorites([]);
-      setPlaylists([]);
-      setSelectedPlaylistData(null);
-      setSelectedPlaylistSongIds([]);
-      setSelectedAlbum(null);
-      setSelectedAlbumSongIds([]);
-      setActivePlaylist(null);
-      setPlaylistsError("");
-      setFavoritesError("");
-      setLoginPassword("");
-    }
-
-
-    async function fetchSongs() {
-      try {
-        setLoading(true);
-        setError("");
-
-        const response = await fetch(`${API_BASE}/songs`, {
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error(`Şarkı API hatası: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const songList = data?._embedded?.songResponseList ?? [];
-
-        const mappedSongs = songList.map((song, index) => ({
-          ...song,
-          id: song.publicId,
-          color: COVER_COLORS[index % COVER_COLORS.length],
-          icon: "♫",
-          time: "—",
-        }));
-
-        setSongs(mappedSongs);
-      } catch (err) {
-        if (err.name !== "AbortError") {
-          setError(err.message || "Şarkılar yüklenemedi.");
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    fetchSongs();
-
-    return () => controller.abort();
-  }, []);
-
-
-  async function apiRequest(path, options = {}) {
-    const token = localStorage.getItem("accessToken");
-
-    const response = await fetch(`${API_BASE}${path}`, {
-      ...options,
-      headers: {
-        ...(options.body ? { "Content-Type": "application/json" } : {}),
-        ...options.headers,
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    });
-
-    if (!response.ok) {
-      const message =
-          response.status === 401
-              ? "Oturum süresi dolmuş. Yeniden giriş yapmalısın."
-              : response.status === 403
-                  ? "Bu işlem için yetkin yok."
-                  : `API hatası: ${response.status}`;
-
-      throw new Error(message);
-    }
-
-    if (response.status === 204) return null;
-
-    return response.json();
-  }
-//Favorites
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    async function fetchFavorites() {
-      const token = localStorage.getItem("accessToken");
-
-      // Giriş yapılmamışsa API çağrısı yapma.
-      if (!token) {
-        setFavorites([]);
-        setFavoritesError("");
-        setFavoritesLoading(false);
-        return;
-      }
-
-      try {
-        setFavoritesLoading(true);
-        setFavoritesError("");
-
-        const data = await apiRequest("/me/favorites", {
-          signal: controller.signal,
-        });
-
-        setFavorites(
-            Array.isArray(data)
-                ? data.map((song) => song.publicId).filter(Boolean)
-                : []
-        );
-      } catch (err) {
-        if (err.name !== "AbortError") {
-          setFavoritesError(err.message || "Favoriler yüklenemedi.");
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setFavoritesLoading(false);
-        }
-      }
-    }
-
-    fetchFavorites();
-
-    return () => controller.abort();
-  }, [authVersion]);
-
-  // ALBÜMLERİ API'DEN GETİR
-  useEffect(() => {
-    const controller = new AbortController();
-
-    async function fetchAlbums() {
-      try {
-        setAlbumsLoading(true);
-        setAlbumsError("");
-
-        const response = await fetch(`${API_BASE}/albums`, {
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error(`Albüm API hatası: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const albumList = getEmbeddedList(data);
-
-        setAlbums(
-            albumList.map((album, index) => ({
-              ...album,
-              id: album.publicId ?? album.id,
-              color: COVER_COLORS[index % COVER_COLORS.length],
-              icon: "♫",
-            }))
-        );
-      } catch (err) {
-        if (err.name !== "AbortError") {
-          setAlbumsError(err.message || "Albümler yüklenemedi.");
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setAlbumsLoading(false);
-        }
-      }
-    }
-
-    fetchAlbums();
-
-    return () => controller.abort();
-  }, []);
-
-  // GİRİŞ YAPAN KULLANICININ PLAYLIST'LERİNİ GETİR
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    async function fetchPlaylists() {
-      const token = localStorage.getItem("accessToken");
-
-      // Giriş yapılmamışsa API çağrısı yapma.
-      if (!token) {
-        setPlaylists([]);
-        setPlaylistsError("");
-        setPlaylistsLoading(false);
-        return;
-      }
-
-      try {
-        setPlaylistsLoading(true);
-        setPlaylistsError("");
-
-        const response = await fetch(`${API_BASE}/playlists`, {
-          signal: controller.signal,
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            throw new Error("Oturum geçersiz veya süresi dolmuş. Tekrar giriş yap.");
-          }
-
-          if (response.status === 403) {
-            throw new Error("Playlist'lere erişim iznin yok.");
-          }
-
-          throw new Error(`Playlist API hatası: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const playlistList = getEmbeddedList(data);
-
-        setPlaylists(
-            playlistList.map((playlist, index) => ({
-              ...playlist,
-              id: playlist.publicId ?? playlist.id,
-              title: playlist.name,
-              color: COVER_COLORS[index % COVER_COLORS.length],
-              icon: "♫",
-            }))
-        );
-      } catch (err) {
-        if (err.name !== "AbortError") {
-          setPlaylistsError(err.message || "Playlist'ler yüklenemedi.");
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setPlaylistsLoading(false);
-        }
-      }
-    }
-
-    fetchPlaylists();
-
-    return () => controller.abort();
-  }, [authVersion]);
-
-
-  // ARAMA: ŞARKI, SANATÇI VE ALBÜM ADI
-  const filteredSongs = useMemo(() => {
-    const term = search.trim().toLocaleLowerCase("tr");
-
-    return songs.filter((song) =>
-        `${song.title ?? ""} ${song.artist ?? ""} ${song.albumName ?? ""}`
-            .toLocaleLowerCase("tr")
-            .includes(term)
-    );
-  }, [search, songs]);
-
-  const activeSong = currentSong ?? songs[0] ?? null;
-
-  const visibleSongs = filteredSongs.filter((song) => {
-    if (
-        activeMenu === "Beğenilen Şarkılar" &&
-        !favorites.includes(song.id)
-    ) {
-      return false;
-    }
-
-    if (
-        selectedAlbum &&
-        !selectedAlbumSongIds.includes(song.id)
-    ) {
-      return false;
-    }
-
-    if (
-        selectedPlaylistData &&
-        !selectedPlaylistSongIds.includes(song.id)
-    ) {
-      return false;
-    }
-
-    return true;
+  // User profile hook
+  const {
+    loading: userLoading,
+    error: userError,
+    setError: setUserError,
+    updateProfile,
+    deleteProfile,
+  } = useUser({
+    loggedIn,
+    onUserUpdated: setUser,
+    onLogout: () => {
+      handleLogout();
+      setProfileOpen(false);
+    },
   });
 
-  function playSong(song) {
-    if (!song) return;
+  // Albums
+  const {
+    albums,
+    albumsLoading,
+    albumsError,
+  } = useAlbums(authVersion);
 
-    setCurrentSong(song);
-    setPlaying(true);
-  }
+  // Songs — server-side search
+  const { songs, loading, error } = useSongs(search || undefined);
 
-  async function toggleFavorite(songPublicId) {
-    if (!songPublicId || favoriteActionLoading) return;
+  // Playlists
+  const {
+    playlists,
+    setPlaylists,
+    playlistsLoading,
+    playlistsError,
+    setPlaylistsError,
+  } = usePlaylists(authVersion);
 
-    const wasFavorite = favorites.includes(songPublicId);
+  // Favorites
+  const {
+    favorites,
+    favoritesLoading,
+    favoritesError,
+    favoriteActionLoading,
+    toggleFavorite,
+  } = useFavorites(authVersion);
 
-    try {
-      setFavoriteActionLoading(true);
-      setFavoritesError("");
+  // With server-side search, songs are already filtered. For album/playlist
+  // views we still need to filter locally against the full set.
+  const allSongs = useMemo(() => songs, [songs]);
 
-      await apiRequest(
-          `/me/favorites/${encodeURIComponent(songPublicId)}`,
-          { method: wasFavorite ? "DELETE" : "PUT" }
-      );
+  const visibleSongs = useVisibleSongs({
+    filteredSongs: allSongs,
+    activeMenu,
+    favorites,
+    selectedAlbum,
+    selectedAlbumSongIds,
+    selectedPlaylistData,
+    selectedPlaylistSongIds,
+  });
 
-      setFavorites((previous) =>
-          wasFavorite
-              ? previous.filter((id) => id !== songPublicId)
-              : previous.includes(songPublicId)
-                  ? previous
-                  : [...previous, songPublicId]
-      );
-    } catch (err) {
-      setFavoritesError(err.message);
-    } finally {
-      setFavoriteActionLoading(false);
-    }
-  }
+  // ---- PLAYLIST HELPERS ----
 
-  function playRelativeSong(direction) {
-    if (songs.length === 0) return;
-
-    const currentIndex = songs.findIndex(
-        (song) => song.id === activeSong?.id
-    );
-
-    const startIndex = currentIndex < 0 ? 0 : currentIndex;
-    const nextIndex =
-        (startIndex + direction + songs.length) % songs.length;
-
-    playSong(songs[nextIndex]);
-  }
-
-  // PLAYLIST DETAYINI YENİDEN GETİR
   async function refreshPlaylistDetails(publicId) {
     const detail = await apiRequest(
         `/playlists/${encodeURIComponent(publicId)}`
@@ -416,11 +130,15 @@ export default function App() {
     return detail;
   }
 
-  // PLAYLIST SEÇ
   async function selectPlaylist(playlist) {
     const publicId = playlist.publicId ?? playlist.id;
     if (!publicId) {
       setPlaylistsError("Playlist kimliği bulunamadı.");
+      return;
+    }
+
+    if (!loggedIn) {
+      setLoginOpen(true);
       return;
     }
 
@@ -438,38 +156,45 @@ export default function App() {
     }
   }
 
-  // ALBÜM SEÇ
+  // ---- ALBUM SELECT ----
+
   async function selectAlbum(album) {
-    const publicId = album.publicId ?? album.id;
+    const publicId = album?.publicId ?? album?.id;
+
     if (!publicId) {
-      setError("Albüm kimliği bulunamadı.");
+      console.error("Albüm kimliği bulunamadı:", album);
       return;
     }
 
     try {
-      setError("");
-
-      const detail = await apiRequest(
-          `/albums/${encodeURIComponent(publicId)}`
-      );
+      const detail = await getAlbumById(publicId);
 
       setSelectedAlbum(detail);
+
       setSelectedAlbumSongIds(
-          (detail.songs ?? []).map((song) => song.publicId).filter(Boolean)
+          (detail.songs ?? [])
+              .map((song) => song.publicId ?? song.id)
+              .filter((id) => id != null)
       );
 
       setSelectedPlaylistData(null);
       setSelectedPlaylistSongIds([]);
       setActivePlaylist(null);
-      setActiveMenu("Kitaplığın");
+
       setSearch("");
     } catch (err) {
-      setError(`Albüm detayları yüklenemedi: ${err.message}`);
+      console.error("Albüm detayları yüklenemedi:", err);
     }
   }
 
-  // PLAYLIST OLUŞTUR
+  // ---- PLAYLIST CRUD ----
+
   async function createPlaylist() {
+    if (!loggedIn) {
+      setLoginOpen(true);
+      return;
+    }
+
     const name = window.prompt("Playlist adı:");
     if (!name?.trim()) return;
 
@@ -501,7 +226,6 @@ export default function App() {
     }
   }
 
-  // PLAYLIST GÜNCELLE
   async function updatePlaylist() {
     if (!selectedPlaylistData?.publicId) return;
 
@@ -549,7 +273,6 @@ export default function App() {
     }
   }
 
-  // PLAYLIST SİL
   async function deletePlaylist() {
     if (!selectedPlaylistData?.publicId) return;
 
@@ -580,28 +303,31 @@ export default function App() {
     }
   }
 
-  // PLAYLIST'E ŞARKI EKLE
-  async function addSongToPlaylist(song) {
-    const playlistId = selectedPlaylistData?.publicId;
-    const songId = song.publicId ?? song.id;
+  // ---- PLAYLIST SONGS ----
 
-    if (!playlistId || !songId) return;
-
-    try {
-      setPlaylistsError("");
-
-      await apiRequest(
-          `/playlists/${encodeURIComponent(playlistId)}/songs/${encodeURIComponent(songId)}`,
-          { method: "PUT" }
-      );
-
-      await refreshPlaylistDetails(playlistId);
-    } catch (err) {
-      setPlaylistsError(err.message || "Şarkı playlist'e eklenemedi.");
+  // Called from AddToPlaylistDropdown — adds song to a specific playlist
+  async function addSongToPlaylist(playlistId, songId) {
+    if (!loggedIn) {
+      throw new Error("Oturum süresi dolmuş. Yeniden giriş yapmalısın.");
     }
+
+    if (!playlistId || !songId) {
+      throw new Error("Geçersiz playlist veya şarkı kimliği.");
+    }
+
+    setPlaylistsError("");
+
+    const result = await addSongToPlaylistApi(playlistId, songId);
+
+    // If we are currently viewing the playlist that was updated, refresh it
+    if (selectedPlaylistData?.publicId === playlistId) {
+      await refreshPlaylistDetails(playlistId);
+    }
+
+    return result;
   }
 
-  // PLAYLIST'TEN ŞARKI ÇIKAR
+  // Called from SongTable's "Çıkar" button — removes song from the currently viewed playlist
   async function removeSongFromPlaylist(song) {
     const playlistId = selectedPlaylistData?.publicId;
     const songId = song.publicId ?? song.id;
@@ -620,25 +346,9 @@ export default function App() {
     } catch (err) {
       setPlaylistsError(err.message || "Şarkı playlist'ten çıkarılamadı.");
     }
-
-
   }
 
-  function handleLibraryClick() {
-    const token = localStorage.getItem("accessToken");
-
-    if (!token) {
-      setLoginError("");
-      setLoginOpen(true);
-      return;
-    }
-
-    setActiveMenu("Kitaplığın");
-    setSelectedAlbum(null);
-    setSelectedAlbumSongIds([]);
-    setSelectedPlaylistData(null);
-    setSelectedPlaylistSongIds([]);
-  }
+  // ---- AUTH ACTIONS ----
 
   async function handleLogin(event) {
     event.preventDefault();
@@ -647,37 +357,8 @@ export default function App() {
     setLoginError("");
 
     try {
-      const response = await fetch(`${API_BASE}/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: loginEmail.trim(),
-          password: loginPassword,
-        }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(
-            data.message ||
-            data.detail ||
-            `Giriş başarısız: ${response.status}`
-        );
-      }
-
-      const token = data.accessToken ?? data.token;
-
-      if (!token) {
-        throw new Error("Giriş yanıtında token bulunamadı.");
-      }
-
-      localStorage.setItem("accessToken", token);
-      setLoggedIn(true);
-      setAuthVersion((version) => version + 1);
-      setLoginOpen(false);
+      const response = await loginRequest(loginEmail.trim(), loginPassword);
+      handleLoginSuccess(response);
       setLoginPassword("");
       setLoginError("");
       setActiveMenu("Kitaplığın");
@@ -688,165 +369,85 @@ export default function App() {
     }
   }
 
+  async function handleRegister(displayName, email, password) {
+    const response = await registerRequest(displayName, email, password);
+    handleLoginSuccess(response);
+    setActiveMenu("Kitaplığın");
+  }
+
+  function handleNavigate(label) {
+    setActiveMenu(label);
+    setActivePlaylist(null);
+    setSelectedAlbum(null);
+    setSelectedAlbumSongIds([]);
+    setSelectedPlaylistData(null);
+    setSelectedPlaylistSongIds([]);
+    setSearch("");
+  }
+
+  function handleAuthAction() {
+    if (loggedIn) {
+      handleLogout();
+      setActiveMenu("Ana Sayfa");
+      setSelectedAlbum(null);
+      setSelectedAlbumSongIds([]);
+      setSelectedPlaylistData(null);
+      setSelectedPlaylistSongIds([]);
+    } else {
+      setLoginError("");
+      setLoginOpen(true);
+    }
+  }
+
+  function handleProfileClick() {
+    setProfileOpen(true);
+    setUserError("");
+  }
+
+  // ---- FAVORITE GUARD ----
+
+  async function guardedToggleFavorite(songId) {
+    if (!loggedIn) {
+      setLoginOpen(true);
+      return;
+    }
+    await toggleFavorite(songId);
+  }
 
   return (
       <div className="app-shell">
         {/* SOL MENÜ */}
-        <aside className="sidebar">
-          <a
-              className="brand"
-              href="#home"
-              onClick={(event) => {
-                event.preventDefault();
-                setActiveMenu("Ana Sayfa");
-                setActivePlaylist(null);
-                setSelectedAlbum(null);
-                setSelectedAlbumSongIds([]);
-                setSelectedPlaylistData(null);
-                setSelectedPlaylistSongIds([]);
-                setSearch("");
-              }}
-          >
-            <span className="brand-icon">≋</span>
-            <span>spotify</span>
-          </a>
-
-          <nav className="main-nav">
-            {[
-              ["⌂", "Ana Sayfa"],
-              ["⌕", "Ara"],
-              ["▤", "Kitaplığın"],
-            ].map(([icon, label]) => (
-                <button
-                    key={label}
-                    className={`nav-item ${activeMenu === label ? "selected" : ""}`}
-                    onClick={() => {
-                      setActiveMenu(label);
-                      setActivePlaylist(null);
-                      setSelectedAlbum(null);
-                      setSelectedAlbumSongIds([]);
-                      setSelectedPlaylistData(null);
-                      setSelectedPlaylistSongIds([]);
-                    }}
-                >
-                  <span className="nav-icon">{icon}</span>
-                  {label}
-                </button>
-            ))}
-          </nav>
-
-          <p className="section-label">ÇALMA LİSTELERİN</p>
-
-          <button className="nav-item" onClick={createPlaylist}>
-            <span className="nav-icon">＋</span>
-            Çalma listesi oluştur
-          </button>
-
-          <button
-              className={`nav-item ${
-                  activeMenu === "Beğenilen Şarkılar" ? "selected" : ""
-              }`}
-              onClick={() => {
-                setActiveMenu("Beğenilen Şarkılar");
-                setActivePlaylist(null);
-                setSelectedAlbum(null);
-                setSelectedAlbumSongIds([]);
-                setSelectedPlaylistData(null);
-                setSelectedPlaylistSongIds([]);
-                setSearch("");
-              }}
-          >
-            <span className="liked-icon">♥</span>
-            Beğenilen Şarkılar
-          </button>
-
-          {playlistsLoading && (
-              <p className="empty-state">Playlist'ler yükleniyor...</p>
-          )}
-
-          {playlistsError && (
-              <p className="empty-state" role="alert">
-                {playlistsError}
-                <button
-                    type="button"
-                    onClick={() => setPlaylistsError("")}
-                    aria-label="Hata mesajını kapat"
-                >
-                  ×
-                </button>
-              </p>
-          )}
-
-          {!playlistsLoading &&
-              playlists.map((playlist) => (
-                  <button
-                      className="nav-item playlist-link"
-                      key={playlist.publicId ?? playlist.id}
-                      onClick={() => selectPlaylist(playlist)}
-                  >
-                    <Cover
-                        color={playlist.color}
-                        icon={playlist.icon}
-                        small
-                    />
-                    {playlist.title ?? playlist.name ?? "İsimsiz playlist"}
-                  </button>
-              ))}
-
-          <div className="sidebar-bottom">
-            <span className="online-dot" />
-            {error
-                ? "Şarkı API bağlantısı kontrol edilmeli"
-                : loading
-                    ? "Backend'e bağlanılıyor..."
-                    : "Şarkılar yüklendi"}
-          </div>
-        </aside>
+        <Sidebar
+            activeMenu={activeMenu}
+            playlists={playlists}
+            playlistsLoading={playlistsLoading}
+            playlistsError={playlistsError}
+            setPlaylistsError={setPlaylistsError}
+            loading={loading}
+            error={error}
+            onNavigate={handleNavigate}
+            onCreatePlaylist={createPlaylist}
+            onSelectPlaylist={selectPlaylist}
+            onSelectLikedSongs={() => {
+              if (!loggedIn) {
+                setLoginOpen(true);
+                return;
+              }
+              handleNavigate("Beğenilen Şarkılar");
+            }}
+        />
 
         {/* ANA İÇERİK */}
         <main className="main-content">
-          <header className="topbar">
-            <div className="search-box">
-              <span>⌕</span>
-              <input
-                  aria-label="Şarkı, sanatçı veya albüm ara"
-                  placeholder="Şarkı, sanatçı veya albüm ara..."
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-              />
-
-              {search && (
-                  <button
-                      className="clear-search"
-                      onClick={() => setSearch("")}
-                      aria-label="Aramayı temizle"
-                  >
-                    ×
-                  </button>
-              )}
-            </div>
-
-
-            <div className="profile-menu">
-              <button
-                  className="profile-button"
-                  onClick={() => {
-                    if (loggedIn) {
-                      handleLogout();
-                    } else {
-                      setLoginError("");
-                      setLoginOpen(true);
-                    }
-                  }}
-              >
-    <span className="profile-avatar">
-      {loggedIn ? "✓" : "Z"}
-    </span>
-                <span>{loggedIn ? "Çıkış yap" : "Giriş yap"}</span>
-              </button>
-            </div>
-
-          </header>
+          <Topbar
+              search={search}
+              setSearch={setSearch}
+              loggedIn={loggedIn}
+              user={user}
+              role={role}
+              onAuthAction={handleAuthAction}
+              onProfileClick={handleProfileClick}
+          />
 
           <section className="content-section">
             <div className="greeting">
@@ -899,39 +500,13 @@ export default function App() {
                                 </button>
                             ))}
                       </div>
-
                       {/* ALBÜMLER */}
-                      <div className="section-heading">
-                        <h2>Albümler</h2>
-                        <span className="muted">{albums.length} albüm</span>
-                      </div>
-
-                      {albumsLoading && (
-                          <p className="empty-state">Albümler yükleniyor...</p>
-                      )}
-
-                      {albumsError && (
-                          <p className="empty-state" role="alert">{albumsError}</p>
-                      )}
-
-                      {!albumsLoading && albums.length === 0 && (
-                          <p className="empty-state">Henüz albüm bulunamadı.</p>
-                      )}
-
-                      <div className="recent-grid">
-                        {!albumsLoading &&
-                            albums.map((album) => (
-                                <button
-                                    className="recent-card"
-                                    key={album.publicId ?? album.id}
-                                    onClick={() => selectAlbum(album)}
-                                >
-                                  <Cover color={album.color} icon={album.icon} />
-                                  <strong>{album.name ?? "İsimsiz albüm"}</strong>
-                                  <span>{album.artistName ?? "Bilinmeyen sanatçı"}</span>
-                                </button>
-                            ))}
-                      </div>
+                      <AlbumGrid
+                          albums={albums}
+                          albumsLoading={albumsLoading}
+                          albumsError={albumsError}
+                          onSelectAlbum={selectAlbum}
+                      />
 
                       {/* SON EKLENEN ŞARKILAR */}
                       <div className="section-heading">
@@ -944,7 +519,6 @@ export default function App() {
                             <button
                                 className="recent-card"
                                 key={song.id}
-                                onClick={() => playSong(song)}
                             >
                               <Cover color={song.color} icon={song.icon} />
                               <strong>{song.title}</strong>
@@ -1001,264 +575,60 @@ export default function App() {
               <span className="muted">{visibleSongs.length} şarkı</span>
             </div>
 
-            <div className="song-table">
-              <div className="song-table-header">
-                <span>#</span>
-                <span>Şarkı</span>
-                <span className="duration">Süre</span>
-                <span />
-              </div>
-
-              {loading && (
-                  <p className="empty-state">Şarkılar yükleniyor...</p>
-              )}
-
-              {!loading && error && (
-                  <p className="empty-state" role="alert">
-                    Şarkılar yüklenemedi: {error}
-                  </p>
-              )}
-
-              {!loading && !error && favoritesLoading &&
-                  activeMenu === "Beğenilen Şarkılar" && (
-                      <p className="empty-state">Favoriler yükleniyor...</p>
-                  )}
-
-              {!loading && !error && visibleSongs.length === 0 && (
-                  <p className="empty-state">
-                    {activeMenu === "Beğenilen Şarkılar"
-                        ? "Henüz favori şarkın yok."
-                        : selectedAlbum
-                            ? "Bu albümde gösterilecek şarkı bulunamadı."
-                            : selectedPlaylistData
-                                ? "Bu playlist'te henüz şarkı yok."
-                                : search
-                                    ? "Bu aramayla eşleşen şarkı bulunamadı."
-                                    : "Henüz şarkı bulunamadı."}
-                  </p>
-              )}
-
-              {!loading &&
-                  !error &&
-                  visibleSongs.map((song, index) => (
-                      <div
-                          className={`song-row ${
-                              activeSong?.id === song.id ? "currently-selected" : ""
-                          }`}
-                          key={song.id}
-                      >
-                        <button
-                            className="row-number"
-                            onClick={() => playSong(song)}
-                            aria-label={`${song.title} şarkısını çal`}
-                        >
-                          {activeSong?.id === song.id && playing
-                              ? "♫"
-                              : index + 1}
-                        </button>
-
-                        <button
-                            className="song-info"
-                            onClick={() => playSong(song)}
-                        >
-                          <Cover color={song.color} icon={song.icon} small />
-                          <span>
-                    <strong>{song.title}</strong>
-                    <small>
-                      {song.artist}
-                      {song.albumName ? ` · ${song.albumName}` : ""}
-                    </small>
-                  </span>
-                        </button>
-
-                        <span className="duration">{song.time}</span>
-
-                        <button
-                            className={`heart-button ${
-                                favorites.includes(song.id) ? "is-favorite" : ""
-                            }`}
-                            aria-label="Favorilere ekle veya çıkar"
-                            disabled={favoriteActionLoading}
-                            onClick={() => toggleFavorite(song.id)}
-                        >
-                          {favorites.includes(song.id) ? "♥" : "♡"}
-                        </button>
-
-                        {selectedPlaylistData && (
-                            selectedPlaylistSongIds.includes(song.id) ? (
-                                <button
-                                    onClick={() => removeSongFromPlaylist(song)}
-                                >
-                                  Çıkar
-                                </button>
-                            ) : (
-                                <button
-                                    onClick={() => addSongToPlaylist(song)}
-                                >
-                                  + Playlist'e ekle
-                                </button>
-                            )
-                        )}
-                      </div>
-                  ))}
-            </div>
+            <SongTable
+                visibleSongs={visibleSongs}
+                loading={loading}
+                error={error}
+                favoritesLoading={favoritesLoading}
+                favorites={favorites}
+                favoriteActionLoading={favoriteActionLoading}
+                activeMenu={activeMenu}
+                selectedPlaylistData={selectedPlaylistData}
+                selectedPlaylistSongIds={selectedPlaylistSongIds}
+                search={search}
+                toggleFavorite={guardedToggleFavorite}
+                addSongToPlaylist={addSongToPlaylist}
+                removeSongFromPlaylist={removeSongFromPlaylist}
+                playlists={playlists}
+                playlistsLoading={playlistsLoading}
+                onPromptLogin={() => setLoginOpen(true)}
+            />
           </section>
         </main>
 
+        {/* GİRİŞ / KAYIT MODALI */}
+        <LoginModal
+            loginOpen={loginOpen}
+            setLoginOpen={setLoginOpen}
+            loginEmail={loginEmail}
+            setLoginEmail={setLoginEmail}
+            loginPassword={loginPassword}
+            setLoginPassword={setLoginPassword}
+            loginLoading={loginLoading}
+            loginError={loginError}
+            handleLogin={handleLogin}
+            handleRegister={handleRegister}
+        />
 
-        {loginOpen && (
-            <div
-                className="login-overlay"
-                onMouseDown={(event) => {
-                  if (event.target === event.currentTarget) {
-                    setLoginOpen(false);
-                  }
+        {/* PROFİL MODALI */}
+        {profileOpen && (
+            <ProfileModal
+                key={user?.publicId ?? "no-user"}
+                profileOpen={profileOpen}
+                setProfileOpen={setProfileOpen}
+                user={user}
+                role={role}
+                loading={userLoading}
+                error={userError}
+                handleUpdate={async (data) => {
+                  await updateProfile(data);
+                  setProfileOpen(false);
                 }}
-            >
-              <section
-                  className="login-modal"
-                  role="dialog"
-                  aria-modal="true"
-                  aria-labelledby="login-title"
-              >
-                <button
-                    className="login-close"
-                    type="button"
-                    onClick={() => setLoginOpen(false)}
-                    aria-label="Giriş penceresini kapat"
-                >
-                  ×
-                </button>
-
-                <div className="login-brand">♫ spotify</div>
-
-                <h2 id="login-title">Tekrar hoş geldin</h2>
-                <p className="login-subtitle">
-                  Hesabına giriş yap ve müziğine devam et.
-                </p>
-
-                <form onSubmit={handleLogin}>
-                  <label htmlFor="login-email">E-posta</label>
-                  <input
-                      id="login-email"
-                      type="email"
-                      autoComplete="email"
-                      placeholder="ornek@email.com"
-                      value={loginEmail}
-                      onChange={(event) => setLoginEmail(event.target.value)}
-                      required
-                  />
-
-                  <label htmlFor="login-password">Şifre</label>
-                  <input
-                      id="login-password"
-                      type="password"
-                      autoComplete="current-password"
-                      placeholder="Şifreni gir"
-                      value={loginPassword}
-                      onChange={(event) => setLoginPassword(event.target.value)}
-                      required
-                  />
-
-                  {loginError && (
-                      <p className="login-error" role="alert">
-                        {loginError}
-                      </p>
-                  )}
-
-                  <button
-                      className="login-submit"
-                      type="submit"
-                      disabled={loginLoading}
-                  >
-                    {loginLoading ? "Giriş yapılıyor..." : "Giriş yap"}
-                  </button>
-                </form>
-
-                <p className="login-footer">
-                  Henüz hesabın yok mu? Önce mevcut kayıt olma endpoint'ini kullanabilirsin.
-                </p>
-              </section>
-            </div>
+                handleDelete={async () => {
+                  await deleteProfile();
+                }}
+            />
         )}
-
-
-        {/* ALT MÜZİK ÇALAR */}
-        <footer className="player">
-          <div className="now-playing">
-            {activeSong ? (
-                <>
-                  <Cover
-                      color={activeSong.color}
-                      icon={activeSong.icon}
-                      small
-                  />
-
-                  <div>
-                    <strong>{activeSong.title}</strong>
-                    <small>{activeSong.artist}</small>
-                  </div>
-
-                  <button
-                      className={`heart-button ${
-                          favorites.includes(activeSong.id) ? "is-favorite" : ""
-                      }`}
-                      disabled={favoriteActionLoading}
-                      onClick={() => toggleFavorite(activeSong.id)}
-                      aria-label="Favorilere ekle veya çıkar"
-                  >
-                    {favorites.includes(activeSong.id) ? "♥" : "♡"}
-                  </button>
-                </>
-            ) : (
-                <span>Henüz şarkı seçilmedi</span>
-            )}
-          </div>
-
-          <div className="player-center">
-            <div className="player-controls">
-              <button
-                  aria-label="Önceki şarkı"
-                  disabled={songs.length === 0}
-                  onClick={() => playRelativeSong(-1)}
-              >
-                |◀
-              </button>
-
-              <button
-                  className="play-button"
-                  aria-label={playing ? "Duraklat" : "Oynat"}
-                  disabled={!activeSong}
-                  onClick={() => setPlaying((value) => !value)}
-              >
-                {playing ? "Ⅱ" : "▶"}
-              </button>
-
-              <button
-                  aria-label="Sonraki şarkı"
-                  disabled={songs.length === 0}
-                  onClick={() => playRelativeSong(1)}
-              >
-                ▶|
-              </button>
-            </div>
-
-            <div className="progress-row">
-              <span>0:00</span>
-              <div className="progress-track">
-                <div />
-              </div>
-              <span>{activeSong?.time ?? "—"}</span>
-            </div>
-          </div>
-
-          <div className="player-extra">
-            <span>♫</span>
-            <div className="volume-track">
-              <div />
-            </div>
-          </div>
-        </footer>
 
         {/* BİLDİRİM */}
         {activePlaylist && (

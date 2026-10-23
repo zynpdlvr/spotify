@@ -25,9 +25,21 @@ button, input {
 }
 
 button {
-  color: inherit;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 999px;
+  background: #6aff9e;
+  color: #ffffff;
+
+  font-size: 10px;
+  font-weight: 700;
   cursor: pointer;
+
+  transition:
+          background 0.2s ease,
+          transform 0.2s ease;
 }
+
 
 button:focus-visible, input:focus-visible {
   outline: 2px solid #1ed760;
@@ -468,7 +480,7 @@ h2 {
 
 .song-table-header, .song-row {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 55px 34px;
+  grid-template-columns: 34px minmax(0, 1fr) 55px 34px 34px auto;
   align-items: center;
   gap: 10px;
 }
@@ -478,6 +490,10 @@ h2 {
   border-bottom: 1px solid #252a32;
   color: #9199a8;
   font-size: 11px;
+}
+
+.song-table-header > .duration {
+  text-align: right;
 }
 
 .song-row {
@@ -528,7 +544,7 @@ h2 {
   font-weight: 600;
 }
 
-.song-info small, .now-playing small {
+.song-info small {
   color: var(--muted);
   font-size: 11px;
 }
@@ -547,6 +563,134 @@ h2 {
   color: var(--green);
 }
 
+/* ---- Add to Playlist Dropdown ---- */
+
+.add-to-playlist-dropdown {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dropdown-trigger {
+  padding: 5px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: #a3acb9;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.18s, background 0.18s;
+}
+
+.dropdown-trigger:hover {
+  color: #fff;
+  background: #2a2f38;
+}
+
+.dropdown-trigger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 100;
+  min-width: 200px;
+  margin-top: 6px;
+  padding: 6px 0;
+  border: 1px solid #2a2f38;
+  border-radius: 8px;
+  background: #1e232b;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+}
+
+.dropdown-header {
+  padding: 8px 14px 6px;
+  color: #b3b8c2;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.dropdown-error {
+  padding: 8px 14px;
+  color: #c94141;
+  font-size: 12px;
+  border-top: 1px solid #2a2f38;
+  margin-top: 4px;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: #e4e4e4;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.dropdown-item:hover {
+  background: #2a2f38;
+}
+
+.dropdown-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dropdown-item.disabled {
+  color: #7e8795;
+  cursor: default;
+}
+
+.dropdown-item-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  background: #2a2f38;
+  color: var(--green);
+  font-size: 14px;
+}
+
+.dropdown-item-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Remove from playlist button */
+.remove-from-playlist-btn {
+  padding: 4px 10px;
+  border: 1px solid #c94141;
+  border-radius: 999px;
+  background: transparent;
+  color: #c94141;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.remove-from-playlist-btn:hover {
+  background: #c94141;
+  color: #fff;
+}
+
 .empty-state {
   padding: 35px 5px;
   color: var(--muted);
@@ -554,125 +698,6 @@ h2 {
   font-size: 13px;
 }
 
-.player {
-  position: fixed;
-  z-index: 10;
-  inset: auto 0 0;
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1.2fr) minmax(100px, 1fr);
-  align-items: center;
-  gap: 20px;
-  min-height: 90px;
-  padding: 13px 25px;
-  border-top: 1px solid #30343e;
-  background: #0b0e13f5;
-  backdrop-filter: blur(18px);
-}
-
-.now-playing {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.now-playing > div:nth-child(2) {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-}
-
-.now-playing strong {
-  overflow: hidden;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.now-playing .cover-small {
-  width: 48px;
-  height: 48px;
-}
-
-.player-center {
-  width: 100%;
-  max-width: 430px;
-  justify-self: center;
-}
-
-.player-controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 23px;
-  margin-bottom: 10px;
-}
-
-.player-controls button {
-  border: 0;
-  background: none;
-  color: #d6dbe3;
-  font-size: 15px;
-}
-
-.player-controls button:hover {
-  color: var(--green);
-}
-
-.player-controls .play-button {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: #f5f6f7;
-  color: #090b0f;
-  font-size: 16px;
-}
-
-.progress-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  color: #9ba4b2;
-  font-size: 9px;
-}
-
-.progress-track, .volume-track {
-  height: 4px;
-  overflow: hidden;
-  border-radius: 5px;
-  background: #39404b;
-}
-
-.progress-track {
-  flex: 1;
-}
-
-.progress-track > div {
-  width: 33%;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--green);
-}
-
-.player-extra {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  color: #c4cad4;
-}
-
-.volume-track {
-  width: min(95px, 65%);
-}
-
-.volume-track > div {
-  width: 65%;
-  height: 100%;
-  background: #e7eaf0;
-}
 
 .toast {
   position: fixed;
@@ -719,14 +744,6 @@ h2 {
 
   .playlist-grid, .recent-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .player {
-    grid-template-columns: minmax(100px, 1fr) minmax(150px, 1.2fr);
-  }
-
-  .player-extra {
-    display: none;
   }
 }
 
@@ -798,43 +815,8 @@ h2 {
     gap: 10px;
   }
 
-  .player {
-    bottom: 57px;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px;
-    min-height: 72px;
-    padding: 9px 12px;
-  }
-
-  .now-playing .cover-small {
-    width: 38px;
-    height: 38px;
-  }
-
-  .now-playing .heart-button {
-    display: none;
-  }
-
-  .player-center {
-    width: auto;
-  }
-
-  .player-controls {
-    gap: 12px;
-    margin: 0;
-  }
-
-  .player-controls .play-button {
-    width: 34px;
-    height: 34px;
-  }
-
-  .progress-row {
-    display: none;
-  }
-
   .song-table-header, .song-row {
-    grid-template-columns: 23px minmax(0, 1fr) 40px 25px;
+    grid-template-columns: 23px minmax(0, 1fr) 40px 25px 25px auto;
     gap: 6px;
   }
 
@@ -1034,6 +1016,143 @@ h2 {
   color: #b3b3b3;
   font-size: 13px;
   line-height: 1.7;
+}
+
+/* Login/Register geçiş butonu */
+.login-switch {
+  border: 0;
+  background: none;
+  color: #1ed760;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 0;
+}
+
+.login-switch:hover {
+  color: #3be477;
+}
+
+/* Profil modalı — silme butonu */
+.profile-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #303030;
+}
+
+.profile-delete {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #c94141;
+  border-radius: 999px;
+  background: transparent;
+  color: #c94141;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.profile-delete:hover {
+  background: #c94141;
+  color: #fff;
+}
+
+/* Hata mesajı */
+.login-error {
+  margin: 8px 0 0;
+  color: #c94141;
+  font-size: 12px;
+}
+
+/* Giriş alt başlığı */
+.login-subtitle {
+  margin: 0 0 26px;
+  color: #b3b3b3;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Marka başlığı */
+.login-brand {
+  margin-bottom: 20px;
+  color: #1ed760;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+/* Rol rozeti */
+.role-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  margin-left: 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+.role-artist {
+  background: #6b3fa0;
+  color: #f0e6ff;
+}
+
+.role-admin {
+  background: #c94141;
+  color: #fff;
+}
+
+.role-user {
+  background: #3a3f47;
+  color: #b3b8c2;
+}
+
+/* Profil modalı — rol alanı */
+.profile-role {
+  margin-top: 14px;
+}
+
+.profile-role label {
+  display: block;
+  margin-bottom: 6px;
+  color: #b3b3b3;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.profile-role-value {
+  display: flex;
+  align-items: center;
+}
+
+/* Kapatma butonu */
+.login-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #b3b3b3;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.18s, color 0.18s;
+}
+
+.login-close:hover {
+  background: #2a2a2a;
+  color: #fff;
 }
 
 /* Küçük ekranlar */
